@@ -27,10 +27,14 @@ pub async fn handle_legacy_gpio(
         return Err(ApiError::InvalidAction);
     }
 
-    // Get the GPIO pin and execute the toggle
+    // Get the GPIO pin and execute the command
     let pin = req.m_pin;
     let mut gpio = state.gpio_controller.lock().await;
-    gpio.toggle_pin(pin).await?;
+    
+    // Use explicit ON/OFF instead of toggle
+    // "ON" means set HIGH, "OFF" means set LOW
+    let set_high = action_upper == "ON";
+    gpio.set_pin(pin, set_high).await?;
 
     let device_name = state.config.get_pin_name(pin);
 
@@ -63,9 +67,11 @@ pub async fn handle_fireplace_control(
         return Err(ApiError::InvalidAction);
     }
 
-    // Execute the toggle
+    // Execute with explicit ON/OFF instead of toggle
+    // "ON" means set HIGH, "OFF" means set LOW
     let mut gpio = state.gpio_controller.lock().await;
-    gpio.toggle_pin(pin).await?;
+    let set_high = action_upper == "ON";
+    gpio.set_pin(pin, set_high).await?;
 
     Ok(Json(ApiResponse {
         success: true,
