@@ -1,0 +1,13 @@
+﻿[room]
+name = "family_room"
+device_ip = "192.168.1.100"
+
+[pins]
+fireplace = 17
+fireplace_fan = 27
+lights = 22
+secondary_device = 23
+
+[safety]
+max_pulse_duration_ms = 5000
+require_confirmation = false
