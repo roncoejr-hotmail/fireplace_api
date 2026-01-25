@@ -89,82 +89,128 @@ impl GpioController {
 
     // Private helper methods for gpio command execution
     
-    /// Write to a GPIO pin using the gpio command
+    /// Write to a GPIO pin using the gpio command with BCM numbering
     fn write_gpio_pin(&self, pin: u32, high: bool) -> crate::error::Result<()> {
-        // Set pin mode to output
+        // Convert physical pin to BCM GPIO number
+        // Physical 37 = GPIO26, Physical 38 = GPIO20
+        let bcm_pin = self.physical_to_bcm(pin)?;
+        
+        tracing::info!("Writing GPIO: Physical pin {} = BCM GPIO {}, value: {}", 
+            pin, bcm_pin, if high { "HIGH" } else { "LOW"});
+        
+        // Set pin mode to output using BCM numbering (-g flag)
+        tracing::debug!("Setting GPIO {} (physical {}) mode to OUT", bcm_pin, pin);
         let mode_result = Command::new("gpio")
-            .args(&["mode", &pin.to_string(), "out"])
+            .args(&["-g", "mode", &bcm_pin.to_string(), "out"])
             .output()
             .map_err(|e| {
                 tracing::error!("Failed to execute gpio mode command: {}", e);
                 crate::error::ApiError::GpioError(format!("GPIO command failed: {}", e))
             })?;
 
+        let mode_stderr = String::from_utf8_lossy(&mode_result.stderr);
+        let mode_stdout = String::from_utf8_lossy(&mode_result.stdout);
+        tracing::debug!("gpio -g mode {} out - status: {}, stdout: {}, stderr: {}", 
+            bcm_pin, mode_result.status, mode_stdout, mode_stderr);
+
         if !mode_result.status.success() {
-            let stderr = String::from_utf8_lossy(&mode_result.stderr);
-            tracing::error!("Failed to set GPIO {} mode: {}", pin, stderr);
-            return Err(crate::error::ApiError::GpioError(format!("Failed to set mode: {}", stderr)));
+            tracing::error!("Failed to set GPIO {} mode: {} {}", bcm_pin, mode_stdout, mode_stderr);
+            return Err(crate::error::ApiError::GpioError(format!("Failed to set mode: {}", mode_stderr)));
         }
 
-        // Write the pin state
+        // Write the pin state using BCM numbering
         let value = if high { "1" } else { "0" };
+        tracing::debug!("Writing GPIO {} value {}", bcm_pin, value);
         let write_result = Command::new("gpio")
-            .args(&["write", &pin.to_string(), value])
+            .args(&["-g", "write", &bcm_pin.to_string(), value])
             .output()
             .map_err(|e| {
                 tracing::error!("Failed to execute gpio write command: {}", e);
                 crate::error::ApiError::GpioError(format!("GPIO command failed: {}", e))
             })?;
 
+        let write_stderr = String::from_utf8_lossy(&write_result.stderr);
+        let write_stdout = String::from_utf8_lossy(&write_result.stdout);
+        tracing::debug!("gpio -g write {} {} - status: {}, stdout: {}, stderr: {}", 
+            bcm_pin, value, write_result.status, write_stdout, write_stderr);
+
         if !write_result.status.success() {
-            let stderr = String::from_utf8_lossy(&write_result.stderr);
-            tracing::error!("Failed to write GPIO {}: {}", pin, stderr);
-            return Err(crate::error::ApiError::GpioError(format!("Failed to write: {}", stderr)));
+            tracing::error!("Failed to write GPIO {}: {} {}", bcm_pin, write_stdout, write_stderr);
+            return Err(crate::error::ApiError::GpioError(format!("Failed to write: {}", write_stderr)));
         }
 
-        tracing::debug!("GPIO pin {} written to {}", pin, value);
+        tracing::info!("GPIO pin {} (BCM {}) written to {}", pin, bcm_pin, value);
         Ok(())
     }
 
     /// Read from a GPIO pin using the gpio command
     fn read_gpio_pin(&self, pin: u32) -> crate::error::Result<PinState> {
+        // Convert physical pin to BCM GPIO number
+        let bcm_pin = self.physical_to_bcm(pin)?;
+        
+        tracing::debug!("Reading GPIO: Physical pin {} = BCM GPIO {}", pin, bcm_pin);
+        
         // Set pin mode to input
         let mode_result = Command::new("gpio")
-            .args(&["mode", &pin.to_string(), "in"])
+            .args(&["-g", "mode", &bcm_pin.to_string(), "in"])
             .output()
             .map_err(|e| {
                 tracing::error!("Failed to execute gpio mode command: {}", e);
                 crate::error::ApiError::GpioError(format!("GPIO command failed: {}", e))
             })?;
 
+        let mode_stderr = String::from_utf8_lossy(&mode_result.stderr);
+        let mode_stdout = String::from_utf8_lossy(&mode_result.stdout);
         if !mode_result.status.success() {
-            let stderr = String::from_utf8_lossy(&mode_result.stderr);
-            tracing::error!("Failed to set GPIO {} mode to input: {}", pin, stderr);
+            tracing::warn!("Failed to set GPIO {} mode to input: {} {}", bcm_pin, mode_stdout, mode_stderr);
         }
 
         // Read the pin state
         let read_result = Command::new("gpio")
-            .args(&["read", &pin.to_string()])
+            .args(&["-g", "read", &bcm_pin.to_string()])
             .output()
             .map_err(|e| {
                 tracing::error!("Failed to execute gpio read command: {}", e);
                 crate::error::ApiError::GpioError(format!("GPIO command failed: {}", e))
             })?;
 
+        let read_stderr = String::from_utf8_lossy(&read_result.stderr);
+        let read_stdout = String::from_utf8_lossy(&read_result.stdout);
+        tracing::debug!("gpio -g read {} - status: {}, stdout: '{}', stderr: '{}'", 
+            bcm_pin, read_result.status, read_stdout, read_stderr);
+
         if !read_result.status.success() {
-            let stderr = String::from_utf8_lossy(&read_result.stderr);
-            tracing::error!("Failed to read GPIO {}: {}", pin, stderr);
-            return Err(crate::error::ApiError::GpioError(format!("Failed to read: {}", stderr)));
+            tracing::error!("Failed to read GPIO {}: {} {}", bcm_pin, read_stdout, read_stderr);
+            return Err(crate::error::ApiError::GpioError(format!("Failed to read: {}", read_stderr)));
         }
 
         let state_str = String::from_utf8_lossy(&read_result.stdout).trim().to_string();
+        tracing::debug!("GPIO {} (physical {}) raw read value: '{}'", bcm_pin, pin, state_str);
+        
         let state = if state_str == "1" {
             PinState::High
         } else {
             PinState::Low
         };
 
-        tracing::debug!("GPIO pin {} read state: {:?}", pin, state);
+        tracing::info!("GPIO pin {} (BCM {}) read state: {:?}", pin, bcm_pin, state);
         Ok(state)
+    }
+
+    /// Convert physical pin number to BCM GPIO number
+    /// Physical pins 37-40 = GPIO26, GPIO20, GPIO21, GPIO16
+    fn physical_to_bcm(&self, physical_pin: u32) -> crate::error::Result<u32> {
+        let bcm = match physical_pin {
+            37 => 26,  // Physical 37 = GPIO26
+            38 => 20,  // Physical 38 = GPIO20
+            22 => 25,  // Physical 22 = GPIO25
+            23 => 24,  // Physical 23 = GPIO24
+            _ => {
+                tracing::warn!("Unknown physical pin {}, attempting to use as BCM", physical_pin);
+                physical_pin
+            }
+        };
+        tracing::debug!("Physical pin {} maps to BCM GPIO {}", physical_pin, bcm);
+        Ok(bcm)
     }
 }
