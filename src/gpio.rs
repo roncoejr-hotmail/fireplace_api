@@ -1,5 +1,6 @@
 ﻿use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::process::Command;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum PinState {
@@ -26,22 +27,30 @@ impl GpioController {
         }
     }
 
-    /// Toggle a GPIO pin (simulated for non-Pi systems)
+    /// Toggle a GPIO pin using the gpio command
     pub async fn toggle_pin(&mut self, pin: u32) -> crate::error::Result<()> {
-        // On a real Raspberry Pi, this would use rppal:
-        // use rppal::gpio::Gpio;
-        // let gpio = Gpio::new()?;
-        // let mut pin = gpio.get(pin)?.into_output();
-        // pin.toggle();
+        tracing::debug!("Attempting to toggle GPIO pin {}", pin);
 
-        // For simulation, just toggle the state
-        let current_state = self.pin_states.get(&pin).cloned().unwrap_or(PinState::Low);
+        // Read current state
+        let current_state = self.read_gpio_pin(pin)?;
+        
+        tracing::debug!("GPIO pin {} current state: {:?}", pin, current_state);
+        
+        // Determine new state (toggle)
         let new_state = match current_state {
-            PinState::High => PinState::Low,
-            PinState::Low => PinState::High,
-            PinState::Unknown => PinState::High,
+            PinState::High => {
+                tracing::debug!("Setting GPIO pin {} to LOW", pin);
+                self.write_gpio_pin(pin, false)?;
+                PinState::Low
+            },
+            _ => {
+                tracing::debug!("Setting GPIO pin {} to HIGH", pin);
+                self.write_gpio_pin(pin, true)?;
+                PinState::High
+            }
         };
 
+        tracing::debug!("GPIO pin {} new state: {:?}", pin, new_state);
         self.pin_states.insert(pin, new_state.clone());
         tracing::info!("GPIO Pin {} toggled to {:?}", pin, new_state);
         Ok(())
@@ -50,6 +59,9 @@ impl GpioController {
     /// Set a GPIO pin to a specific state
     pub async fn set_pin(&mut self, pin: u32, high: bool) -> crate::error::Result<()> {
         let state = if high { PinState::High } else { PinState::Low };
+        tracing::debug!("Setting GPIO pin {} to {:?}", pin, state);
+        
+        self.write_gpio_pin(pin, high)?;
         self.pin_states.insert(pin, state.clone());
         tracing::info!("GPIO Pin {} set to {:?}", pin, state);
         Ok(())
@@ -73,5 +85,86 @@ impl GpioController {
                 last_toggled: Some(chrono::Local::now().to_rfc3339()),
             })
             .collect()
+    }
+
+    // Private helper methods for gpio command execution
+    
+    /// Write to a GPIO pin using the gpio command
+    fn write_gpio_pin(&self, pin: u32, high: bool) -> crate::error::Result<()> {
+        // Set pin mode to output
+        let mode_result = Command::new("gpio")
+            .args(&["mode", &pin.to_string(), "out"])
+            .output()
+            .map_err(|e| {
+                tracing::error!("Failed to execute gpio mode command: {}", e);
+                crate::error::ApiError::GpioError(format!("GPIO command failed: {}", e))
+            })?;
+
+        if !mode_result.status.success() {
+            let stderr = String::from_utf8_lossy(&mode_result.stderr);
+            tracing::error!("Failed to set GPIO {} mode: {}", pin, stderr);
+            return Err(crate::error::ApiError::GpioError(format!("Failed to set mode: {}", stderr)));
+        }
+
+        // Write the pin state
+        let value = if high { "1" } else { "0" };
+        let write_result = Command::new("gpio")
+            .args(&["write", &pin.to_string(), value])
+            .output()
+            .map_err(|e| {
+                tracing::error!("Failed to execute gpio write command: {}", e);
+                crate::error::ApiError::GpioError(format!("GPIO command failed: {}", e))
+            })?;
+
+        if !write_result.status.success() {
+            let stderr = String::from_utf8_lossy(&write_result.stderr);
+            tracing::error!("Failed to write GPIO {}: {}", pin, stderr);
+            return Err(crate::error::ApiError::GpioError(format!("Failed to write: {}", stderr)));
+        }
+
+        tracing::debug!("GPIO pin {} written to {}", pin, value);
+        Ok(())
+    }
+
+    /// Read from a GPIO pin using the gpio command
+    fn read_gpio_pin(&self, pin: u32) -> crate::error::Result<PinState> {
+        // Set pin mode to input
+        let mode_result = Command::new("gpio")
+            .args(&["mode", &pin.to_string(), "in"])
+            .output()
+            .map_err(|e| {
+                tracing::error!("Failed to execute gpio mode command: {}", e);
+                crate::error::ApiError::GpioError(format!("GPIO command failed: {}", e))
+            })?;
+
+        if !mode_result.status.success() {
+            let stderr = String::from_utf8_lossy(&mode_result.stderr);
+            tracing::error!("Failed to set GPIO {} mode to input: {}", pin, stderr);
+        }
+
+        // Read the pin state
+        let read_result = Command::new("gpio")
+            .args(&["read", &pin.to_string()])
+            .output()
+            .map_err(|e| {
+                tracing::error!("Failed to execute gpio read command: {}", e);
+                crate::error::ApiError::GpioError(format!("GPIO command failed: {}", e))
+            })?;
+
+        if !read_result.status.success() {
+            let stderr = String::from_utf8_lossy(&read_result.stderr);
+            tracing::error!("Failed to read GPIO {}: {}", pin, stderr);
+            return Err(crate::error::ApiError::GpioError(format!("Failed to read: {}", stderr)));
+        }
+
+        let state_str = String::from_utf8_lossy(&read_result.stdout).trim().to_string();
+        let state = if state_str == "1" {
+            PinState::High
+        } else {
+            PinState::Low
+        };
+
+        tracing::debug!("GPIO pin {} read state: {:?}", pin, state);
+        Ok(state)
     }
 }
