@@ -31,9 +31,8 @@ pub async fn handle_legacy_gpio(
     let pin = req.m_pin;
     let mut gpio = state.gpio_controller.lock().await;
     
-    // Relay is inverted: LOW (0) = ON, HIGH (1) = OFF
-    // So "ON" command should set LOW, "OFF" should set HIGH
-    let set_high = action_upper == "OFF";
+    // Normal relay: HIGH (1) = ON, LOW (0) = OFF
+    let set_high = action_upper == "ON";
     gpio.set_pin(pin, set_high).await?;
 
     let device_name = state.config.get_pin_name(pin);
@@ -68,10 +67,9 @@ pub async fn handle_fireplace_control(
     }
 
     // Execute with explicit ON/OFF instead of toggle
-    // Relay is inverted: LOW (0) = ON, HIGH (1) = OFF
-    // So "ON" command should set LOW, "OFF" should set HIGH
+    // Normal relay: HIGH (1) = ON, LOW (0) = OFF
     let mut gpio = state.gpio_controller.lock().await;
-    let set_high = action_upper == "OFF";
+    let set_high = action_upper == "ON";
     gpio.set_pin(pin, set_high).await?;
 
     Ok(Json(ApiResponse {
