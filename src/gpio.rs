@@ -105,7 +105,7 @@ impl GpioController {
         // Set pin mode to output
         tracing::debug!("Setting GPIO pin {} mode to output", pin);
         let mode_result = Command::new("gpio")
-            .args(&["mode", &pin.to_string(), "out"])
+            .args(&["-g", "mode", &pin.to_string(), "out"])
             .output()
             .map_err(|e| {
                 tracing::error!("Failed to execute gpio mode command: {}", e);
@@ -123,7 +123,7 @@ impl GpioController {
         
         tracing::debug!("Writing GPIO pin {} value {}", pin, value);
         let write_result = Command::new("gpio")
-            .args(&["write", &pin.to_string(), value])
+            .args(&["-g", "write", &pin.to_string(), value])
             .output()
             .map_err(|e| {
                 tracing::error!("Failed to execute gpio write command: {}", e);
@@ -146,7 +146,7 @@ impl GpioController {
         
         // Set pin mode to input
         let mode_result = Command::new("gpio")
-            .args(&["mode", &pin.to_string(), "in"])
+            .args(&["-g", "mode", &pin.to_string(), "in"])
             .output()
             .map_err(|e| {
                 tracing::error!("Failed to execute gpio mode command: {}", e);
@@ -162,7 +162,7 @@ impl GpioController {
         // Read the pin state
         tracing::debug!("Reading GPIO pin {} value", pin);
         let read_result = Command::new("gpio")
-            .args(&["read", &pin.to_string()])
+            .args(&["-g", "read", &pin.to_string()])
             .output()
             .map_err(|e| {
                 tracing::error!("Failed to execute gpio read command: {}", e);
