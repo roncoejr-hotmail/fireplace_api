@@ -21,6 +21,8 @@ pub struct PinConfig {
     pub lights: Option<u32>,
     #[serde(default)]
     pub secondary_device: Option<u32>,
+    #[serde(default)]
+    pub active_low: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,6 +51,7 @@ impl Config {
                 fireplace_fan: 27,
                 lights: Some(22),
                 secondary_device: Some(23),
+                active_low: false,
             },
             safety: SafetyConfig {
                 max_pulse_duration_ms: 5000,

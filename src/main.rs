@@ -24,8 +24,9 @@ async fn main() {
 
     tracing::info!("Starting Fireplace API Server");
 
-    // Load configuration with fallback logic
-    let config = config::Config::load_with_fallback("family_room");
+    // Load configuration with fallback logic for master bedroom by default
+    // Override via FIREPLACE_API_CONFIG env var if needed
+    let config = config::Config::load_with_fallback("master_bedroom");
 
     // Create application state
     let state = state::AppState {

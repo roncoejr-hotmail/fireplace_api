@@ -57,11 +57,19 @@ impl GpioController {
     }
 
     /// Set a GPIO pin to a specific state
-    pub async fn set_pin(&mut self, pin: u32, high: bool) -> crate::error::Result<()> {
-        let state = if high { PinState::High } else { PinState::Low };
-        tracing::debug!("Setting GPIO pin {} to {:?}", pin, state);
+    pub async fn set_pin(&mut self, pin: u32, logical_on: bool, active_low: bool) -> crate::error::Result<()> {
+        let physical_high = if active_low { !logical_on } else { logical_on };
+        let state = if physical_high { PinState::High } else { PinState::Low };
+        tracing::debug!(
+            "Setting GPIO pin {} to {:?} (logical_on={}, active_low={}, physical_high={})",
+            pin,
+            state,
+            logical_on,
+            active_low,
+            physical_high
+        );
         
-        self.write_gpio_pin(pin, high)?;
+        self.write_gpio_pin(pin, physical_high)?;
         self.pin_states.insert(pin, state.clone());
         tracing::info!("GPIO Pin {} set to {:?}", pin, state);
         Ok(())
