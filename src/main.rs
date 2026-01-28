@@ -3,6 +3,7 @@ mod config;
 mod error;
 mod gpio;
 mod state;
+mod hap_server;
 
 use axum::{
     Router,
@@ -51,9 +52,21 @@ async fn main() {
         .route("/api/v1/config/reload", axum::routing::post(api::handlers::handle_reload_config))
         
         .layer(CorsLayer::permissive())
-        .with_state(state);
+        .with_state(state.clone());
 
-    // Start server
+    // Clone state for HAP server
+    let hap_gpio = Arc::clone(&state.gpio_controller);
+    let hap_config = Arc::clone(&state.config);
+
+    // Spawn HomeKit Accessory Protocol server in background
+    tokio::spawn(async move {
+        tracing::info!("Launching HomeKit Accessory Protocol server...");
+        if let Err(e) = hap_server::start_hap_server(hap_config, hap_gpio).await {
+            tracing::error!("HAP server error: {}", e);
+        }
+    });
+
+    // Start REST API server
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8090")
         .await
         .expect("Failed to bind to port 8090");
