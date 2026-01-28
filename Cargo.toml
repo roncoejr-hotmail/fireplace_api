@@ -32,7 +32,7 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.0", features = ["v4", "serde"] }
 
 # HomeKit Accessory Protocol
-hap = "0.1.0-pre.15"
+hap = "0.1.0-pre.14"
 
 [dev-dependencies]
 tokio-test = "0.4"
