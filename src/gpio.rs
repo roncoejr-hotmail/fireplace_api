@@ -103,13 +103,14 @@ impl GpioController {
         
         // Use gpioset with --chip and --hold-period (gpioset v2.x)
         // Spawn without waiting since --hold-period will auto-exit after the pulse
-        // Syntax: gpioset --chip gpiochip0 --hold-period 200ms PIN=VALUE
+        // Use short 50ms pulse to minimize chance of "device busy" errors
+        // Syntax: gpioset --chip gpiochip0 --hold-period 50ms PIN=VALUE
         let value = if high { "1" } else { "0" };
         let pin_value = format!("{}={}", pin, value);
         
-        tracing::debug!("Executing: gpioset --chip gpiochip0 --hold-period 200ms {}", pin_value);
+        tracing::debug!("Executing: gpioset --chip gpiochip0 --hold-period 50ms {}", pin_value);
         Command::new("gpioset")
-            .args(&["--chip", "gpiochip0", "--hold-period", "200ms", &pin_value])
+            .args(&["--chip", "gpiochip0", "--hold-period", "50ms", &pin_value])
             .spawn()
             .map_err(|e| {
                 tracing::error!("Failed to execute gpioset command: {}", e);
