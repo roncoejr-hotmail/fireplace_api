@@ -103,7 +103,8 @@ impl GpioController {
         
         // Use raspi-gpio to set pin as output and drive it
         let level = if high { "dh" } else { "dl" };
-        let args = vec!["set", &pin.to_string(), "op", level];
+        let pin_str = pin.to_string();
+        let args = vec!["set", &pin_str, "op", level];
         
         tracing::debug!("Executing: raspi-gpio {}", args.join(" "));
         let write_result = Command::new("raspi-gpio")
@@ -130,9 +131,10 @@ impl GpioController {
         tracing::debug!("Reading GPIO pin {}", pin);
         
         // Use raspi-gpio to read the pin state
+        let pin_str = pin.to_string();
         tracing::debug!("Executing: raspi-gpio get {}", pin);
         let read_result = Command::new("raspi-gpio")
-            .args(&["get", &pin.to_string()])
+            .args(&["get", &pin_str])
             .output()
             .map_err(|e| {
                 tracing::error!("Failed to execute raspi-gpio command: {}", e);
