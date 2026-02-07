@@ -102,22 +102,29 @@ impl GpioController {
         tracing::info!("Writing GPIO pin {} to {}", pin, if high { "HIGH" } else { "LOW"});
         
         // Use gpioset with --chip and --hold-period (gpioset v2.x)
-        // Spawn without waiting since --hold-period will auto-exit after the pulse
+        // Wait for completion so the line is released before the next request
         // Use short 50ms pulse to minimize chance of "device busy" errors
         // Syntax: gpioset --chip gpiochip0 --hold-period 50ms PIN=VALUE
         let value = if high { "1" } else { "0" };
         let pin_value = format!("{}={}", pin, value);
         
         tracing::debug!("Executing: gpioset --chip gpiochip0 --hold-period 50ms {}", pin_value);
-        Command::new("gpioset")
+        let write_result = Command::new("gpioset")
             .args(&["--chip", "gpiochip0", "--hold-period", "50ms", &pin_value])
-            .spawn()
+            .output()
             .map_err(|e| {
                 tracing::error!("Failed to execute gpioset command: {}", e);
                 crate::error::ApiError::GpioError(format!("gpioset command failed: {}", e))
             })?;
 
-        tracing::info!("GPIO pin {} pulse initiated to {}", pin, value);
+        if !write_result.status.success() {
+            let stderr = String::from_utf8_lossy(&write_result.stderr);
+            let stdout = String::from_utf8_lossy(&write_result.stdout);
+            tracing::error!("Failed to write GPIO pin {}: {} {}", pin, stdout, stderr);
+            return Err(crate::error::ApiError::GpioError(format!("Failed to write: {}", stderr)));
+        }
+
+        tracing::info!("GPIO pin {} set to {}", pin, value);
         Ok(())
     }
 
