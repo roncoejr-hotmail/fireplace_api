@@ -101,15 +101,14 @@ impl GpioController {
     fn write_gpio_pin(&self, pin: u32, high: bool) -> crate::error::Result<()> {
         tracing::info!("Writing GPIO pin {} to {}", pin, if high { "HIGH" } else { "LOW"});
         
-        // Use gpioset to drive the pin
-        // Syntax: gpioset --mode=exit --chip=gpiochip0 PIN=VALUE
+        // Use gpioset to drive the pin (v1.x syntax)
+        // Syntax: gpioset <chip> <offset>=<value>
         let value = if high { "1" } else { "0" };
         let pin_str = pin.to_string();
-        let pin_value = format!("{}={}", pin, value);
         
-        tracing::debug!("Executing: gpioset --mode=exit --chip=gpiochip0 {}", pin_value);
+        tracing::debug!("Executing: gpioset 0 {}={}", pin, value);
         let write_result = Command::new("gpioset")
-            .args(&["--mode=exit", "--chip=gpiochip0", &pin_value])
+            .args(&["0", &format!("{}={}", pin, value)])
             .output()
             .map_err(|e| {
                 tracing::error!("Failed to execute gpioset command: {}", e);
@@ -131,12 +130,12 @@ impl GpioController {
     fn read_gpio_pin(&self, pin: u32) -> crate::error::Result<PinState> {
         tracing::debug!("Reading GPIO pin {}", pin);
         
-        // Use gpioget to read the pin state
-        // Syntax: gpioget --chip=gpiochip0 PIN
+        // Use gpioget to read the pin state (v1.x syntax)
+        // Syntax: gpioget <chip> <offset>
         let pin_str = pin.to_string();
-        tracing::debug!("Executing: gpioget --chip=gpiochip0 {}", pin);
+        tracing::debug!("Executing: gpioget 0 {}", pin);
         let read_result = Command::new("gpioget")
-            .args(&["--chip=gpiochip0", &pin_str])
+            .args(&["0", &pin_str])
             .output()
             .map_err(|e| {
                 tracing::error!("Failed to execute gpioget command: {}", e);
