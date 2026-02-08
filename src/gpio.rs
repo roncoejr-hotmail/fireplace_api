@@ -101,16 +101,15 @@ impl GpioController {
     fn write_gpio_pin(&self, pin: u32, high: bool) -> crate::error::Result<()> {
         tracing::info!("Writing GPIO pin {} to {}", pin, if high { "HIGH" } else { "LOW"});
         
-        // Use gpioset with --chip and --hold-period (gpioset v2.x)
-        // Wait for completion so the line is released before the next request
-        // Use short 50ms pulse to minimize chance of "device busy" errors
-        // Syntax: gpioset --chip gpiochip0 --hold-period 50ms PIN=VALUE
+        // Use gpioset with --chip and --toggle so the command exits quickly
+        // This generates a short pulse and releases the line
+        // Syntax: gpioset --chip gpiochip0 --toggle 50ms,0 PIN=VALUE
         let value = if high { "1" } else { "0" };
         let pin_value = format!("{}={}", pin, value);
         
-        tracing::debug!("Executing: gpioset --chip gpiochip0 --hold-period 50ms {}", pin_value);
+        tracing::debug!("Executing: gpioset --chip gpiochip0 --toggle 50ms,0 {}", pin_value);
         let write_result = Command::new("gpioset")
-            .args(&["--chip", "gpiochip0", "--hold-period", "50ms", &pin_value])
+            .args(&["--chip", "gpiochip0", "--toggle", "50ms,0", &pin_value])
             .output()
             .map_err(|e| {
                 tracing::error!("Failed to execute gpioset command: {}", e);
